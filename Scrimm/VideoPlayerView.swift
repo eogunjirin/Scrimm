@@ -1,17 +1,12 @@
 import SwiftUI
-import AVKit // This import is important
+import AVKit
 
 struct VideoPlayerView: View {
-    var videoURL: URL
-    
-    private var player: AVPlayer {
-        return AVPlayer(url: videoURL)
-    }
+    let videoURL: URL
     
     var body: some View {
-        VideoPlayer(player: player)
-            .onAppear {
-                player.play()
-            }
+        // Use a standard AVPlayerViewController for robust video playback.
+        VideoPlayer(player: AVPlayer(url: videoURL))
+            .edgesIgnoringSafeArea(.all)
     }
 }

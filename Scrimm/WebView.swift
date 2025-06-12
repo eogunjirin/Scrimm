@@ -3,10 +3,8 @@ import WebKit
 
 struct WebView: NSViewRepresentable {
     let url: URL
-    // **CHANGE 1: The completion handler now sends back a `FoundVideo` object.**
     var onVideoFound: (FoundVideo) -> Void
 
-    // This part remains the same.
     func makeNSView(context: Context) -> WKWebView {
         let scriptSource = """
             (function() {
@@ -72,7 +70,6 @@ struct WebView: NSViewRepresentable {
                 let videoExtensions = ["mp4", "mov", "m4v", "m3u8"]
                 
                 if videoExtensions.contains(pathExtension) {
-                    // **CHANGE 2: Get the page title and package it with the URL.**
                     let pageTitle = webView.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Untitled Video"
                     let videoInfo = FoundVideo(
                         pageTitle: pageTitle.isEmpty ? "Untitled Video" : pageTitle,
@@ -92,12 +89,12 @@ struct WebView: NSViewRepresentable {
                     finalVideoURL = URL(string: videoURLString)
                 } else {
                     if let pageURL = message.frameInfo.request.url {
+                        // ** THIS IS THE FIX: Corrected variable name **
                         finalVideoURL = URL(string: videoURLString, relativeTo: pageURL)
                     }
                 }
                 
                 if let finalURL = finalVideoURL {
-                    // **CHANGE 3: Get the page title from the message's webView and package it.**
                     let pageTitle = message.webView?.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Untitled Video"
                     let videoInfo = FoundVideo(
                         pageTitle: pageTitle.isEmpty ? "Untitled Video" : pageTitle,
