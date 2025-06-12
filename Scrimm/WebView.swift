@@ -3,7 +3,8 @@ import WebKit
 
 struct WebView: NSViewRepresentable {
     let url: URL
-    var onVideoFound: (URL) -> Void
+    // **CHANGE 1: The completion handler now sends back a `FoundVideo` object.**
+    var onVideoFound: (FoundVideo) -> Void
 
     // This part remains the same.
     func makeNSView(context: Context) -> WKWebView {
@@ -58,7 +59,6 @@ struct WebView: NSViewRepresentable {
         Coordinator(self)
     }
 
-    // --- The Coordinator is where the new logic is added. ---
     class Coordinator: NSObject, WKUIDelegate, WKNavigationDelegate, WKScriptMessageHandler {
         var parent: WebView
 
@@ -66,30 +66,26 @@ struct WebView: NSViewRepresentable {
             self.parent = parent
         }
 
-        // --- METHOD 2: NAVIGATION INTERCEPTION ---
-        // This watches for pop-ups or navigation attempts to video files.
         func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
             if let url = navigationAction.request.url {
-                print("[Navigation Interceptor] Intercepted URL: \(url)")
                 let pathExtension = url.pathExtension.lowercased()
-                let videoExtensions = ["mp4", "mov", "m4v", "m3u8"] // Common video/stream formats
+                let videoExtensions = ["mp4", "mov", "m4v", "m3u8"]
                 
                 if videoExtensions.contains(pathExtension) {
-                    print("[Navigation Interceptor] Found video link! Transferring to native player.")
-                    // It's a video link, pass it to our app.
-                    parent.onVideoFound(url)
+                    // **CHANGE 2: Get the page title and package it with the URL.**
+                    let pageTitle = webView.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Untitled Video"
+                    let videoInfo = FoundVideo(
+                        pageTitle: pageTitle.isEmpty ? "Untitled Video" : pageTitle,
+                        videoURL: url
+                    )
+                    parent.onVideoFound(videoInfo)
                 }
-                // For anything else, we block it silently by doing nothing.
             }
-            // Returning nil prevents the new window from opening.
             return nil
         }
 
-        // --- METHOD 1: JAVASCRIPT MESSAGE HANDLER ---
-        // This handles URLs found by our powerful injected script.
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == "videoPlayback", let videoURLString = message.body as? String {
-                print("[JavaScript Interceptor] Received URL string: \(videoURLString)")
                 var finalVideoURL: URL?
 
                 if videoURLString.lowercased().hasPrefix("http") {
@@ -101,12 +97,15 @@ struct WebView: NSViewRepresentable {
                 }
                 
                 if let finalURL = finalVideoURL {
-                    print("[JavaScript Interceptor] Successfully resolved URL. Transferring to native player.")
+                    // **CHANGE 3: Get the page title from the message's webView and package it.**
+                    let pageTitle = message.webView?.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Untitled Video"
+                    let videoInfo = FoundVideo(
+                        pageTitle: pageTitle.isEmpty ? "Untitled Video" : pageTitle,
+                        videoURL: finalURL
+                    )
                     DispatchQueue.main.async {
-                        self.parent.onVideoFound(finalURL)
+                        self.parent.onVideoFound(videoInfo)
                     }
-                } else {
-                    print("[JavaScript Interceptor] Failed to resolve URL.")
                 }
             }
         }
