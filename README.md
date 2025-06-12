@@ -23,7 +23,7 @@ Scrimm is a minimalist macOS utility that extracts video streams from web pages 
 
 1.  **Clone the repo:**
     ```sh
-    git clone https://github.com/your-username/your-repo-name.git
+    git clone https://github.com/eogunjirin/Scrimm
     ```
 2.  **Open in Xcode:**
     ```sh
