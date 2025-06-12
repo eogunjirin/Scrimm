@@ -3,7 +3,6 @@ import WebKit
 
 struct WebView: NSViewRepresentable {
     let url: URL
-    // The completion handler signature is correct, it sends a FoundVideo
     var onVideoFound: (FoundVideo) -> Void
 
     func makeNSView(context: Context) -> WKWebView {
@@ -92,6 +91,7 @@ struct WebView: NSViewRepresentable {
                     finalVideoURL = URL(string: videoURLString)
                 } else {
                     if let pageURL = message.frameInfo.request.url {
+                        // ** THIS IS THE FIX: Corrected variable name **
                         finalVideoURL = URL(string: videoURLString, relativeTo: pageURL)
                     }
                 }
