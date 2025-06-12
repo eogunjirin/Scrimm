@@ -1,12 +1,12 @@
 import SwiftUI
 import AVKit
 
-// --- 1. DATA MODELS (with playback time) ---
+// --- DATA MODELS & HELPERS (Unchanged) ---
 struct RecentItem: Identifiable, Codable, Equatable {
     let id: UUID
     let title: String
     let urlString: String
-    var playbackTime: Double // Stores time in seconds
+    var playbackTime: Double
 
     init(title: String, url: URL, playbackTime: Double = 0.0) {
         self.id = UUID()
@@ -24,7 +24,6 @@ struct FoundVideo: Identifiable, Equatable {
     let lastPlayedTime: Double
 }
 
-// --- 2. HELPER VIEWS ---
 struct VisualEffectView: NSViewRepresentable {
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
@@ -34,7 +33,7 @@ struct VisualEffectView: NSViewRepresentable {
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 
-// --- 3. MAIN CONTENT VIEW ---
+// --- MAIN CONTENT VIEW ---
 struct ContentView: View {
     enum AppState { case launcher, browser, videoPlayer }
     
@@ -73,7 +72,7 @@ struct ContentView: View {
                             self.foundVideo = FoundVideo(
                                 pageTitle: videoFromWeb.pageTitle,
                                 videoURL: videoFromWeb.videoURL,
-                                lastPlayedTime: 0.0 // Always start new videos from the beginning
+                                lastPlayedTime: 0.0
                             )
                             self.appState = .videoPlayer
                         }
@@ -101,11 +100,15 @@ struct ContentView: View {
         }
     }
     
-    // --- HELPER FUNCTIONS ---
+    // --- HELPER FUNCTIONS (addRecentItem is updated) ---
     private func addRecentItem(title: String, url: URL) {
         if !recentItems.contains(where: { $0.urlString == url.absoluteString }) {
             recentItems.insert(RecentItem(title: title, url: url), at: 0)
-            if recentItems.count > 5 { recentItems = Array(recentItems.prefix(5)) }
+            
+            // ** THIS IS THE CHANGE: Limit is now 10 **
+            if recentItems.count > 10 {
+                recentItems = Array(recentItems.prefix(10))
+            }
             saveRecents()
         }
     }
@@ -132,7 +135,7 @@ struct ContentView: View {
     }
 }
 
-// --- 4. MODULAR UI COMPONENTS (ALL VISIBLE AND CORRECT) ---
+// --- UI COMPONENTS, EXTENSIONS, & PREVIEWS (Unchanged) ---
 
 struct LauncherView: View {
     @Binding var urlString: String
@@ -259,7 +262,6 @@ struct BackButton: View {
     }
 }
 
-// --- 5. EXTENSIONS & PREVIEWS ---
 extension URL: Identifiable {
     public var id: String { self.absoluteString }
 }
