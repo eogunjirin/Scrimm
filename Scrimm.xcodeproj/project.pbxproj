@@ -6,13 +6,31 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		14BE51E02DFB47A100F93BF1 /* AVKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 14BE51DF2DFB47A100F93BF1 /* AVKit.framework */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		1441426D2DFB112000906243 /* Scrimm.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Scrimm.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		14BE51DF2DFB47A100F93BF1 /* AVKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVKit.framework; path = System/Library/Frameworks/AVKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		14BE51FC2DFB4ABF00F93BF1 /* Exceptions for "Scrimm" folder in "Scrimm" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 1441426C2DFB112000906243 /* Scrimm */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		1441426F2DFB112000906243 /* Scrimm */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				14BE51FC2DFB4ABF00F93BF1 /* Exceptions for "Scrimm" folder in "Scrimm" target */,
+			);
 			path = Scrimm;
 			sourceTree = "<group>";
 		};
@@ -23,6 +41,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				14BE51E02DFB47A100F93BF1 /* AVKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -33,6 +52,7 @@
 			isa = PBXGroup;
 			children = (
 				1441426F2DFB112000906243 /* Scrimm */,
+				14BE51DE2DFB47A000F93BF1 /* Frameworks */,
 				1441426E2DFB112000906243 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -43,6 +63,14 @@
 				1441426D2DFB112000906243 /* Scrimm.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		14BE51DE2DFB47A000F93BF1 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				14BE51DF2DFB47A100F93BF1 /* AVKit.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -249,11 +277,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Scrimm/Scrimm.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Scrimm/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -274,11 +304,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Scrimm/Scrimm.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Scrimm/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
