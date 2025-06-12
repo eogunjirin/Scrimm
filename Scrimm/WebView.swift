@@ -3,10 +3,9 @@ import WebKit
 
 struct WebView: NSViewRepresentable {
     let url: URL
-    // **CHANGE 1: The completion handler now sends back a `FoundVideo` object.**
+    // The completion handler signature is correct, it sends a FoundVideo
     var onVideoFound: (FoundVideo) -> Void
 
-    // This part remains the same.
     func makeNSView(context: Context) -> WKWebView {
         let scriptSource = """
             (function() {
@@ -72,11 +71,12 @@ struct WebView: NSViewRepresentable {
                 let videoExtensions = ["mp4", "mov", "m4v", "m3u8"]
                 
                 if videoExtensions.contains(pathExtension) {
-                    // **CHANGE 2: Get the page title and package it with the URL.**
                     let pageTitle = webView.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Untitled Video"
+                    // ** THE FIX IS HERE: Add the missing parameter **
                     let videoInfo = FoundVideo(
                         pageTitle: pageTitle.isEmpty ? "Untitled Video" : pageTitle,
-                        videoURL: url
+                        videoURL: url,
+                        lastPlayedTime: 0.0 // New videos always start at 0
                     )
                     parent.onVideoFound(videoInfo)
                 }
@@ -97,11 +97,12 @@ struct WebView: NSViewRepresentable {
                 }
                 
                 if let finalURL = finalVideoURL {
-                    // **CHANGE 3: Get the page title from the message's webView and package it.**
                     let pageTitle = message.webView?.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Untitled Video"
+                    // ** THE FIX IS HERE: Add the missing parameter **
                     let videoInfo = FoundVideo(
                         pageTitle: pageTitle.isEmpty ? "Untitled Video" : pageTitle,
-                        videoURL: finalURL
+                        videoURL: finalURL,
+                        lastPlayedTime: 0.0 // New videos always start at 0
                     )
                     DispatchQueue.main.async {
                         self.parent.onVideoFound(videoInfo)
