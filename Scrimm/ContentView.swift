@@ -1,254 +1,213 @@
 import SwiftUI
 import AVKit
+import WebKit
 
-// --- DATA MODELS & HELPERS (Unchanged) ---
-struct RecentItem: Identifiable, Codable, Equatable {
-    let id: UUID
-    let title: String
-    let urlString: String
-    var playbackTime: Double
-
-    init(title: String, url: URL, playbackTime: Double = 0.0) {
-        self.id = UUID()
-        self.title = title
-        self.urlString = url.absoluteString
-        self.playbackTime = playbackTime
-    }
-}
-
-struct FoundVideo: Identifiable, Equatable {
-    static func == (lhs: FoundVideo, rhs: FoundVideo) -> Bool { lhs.id == rhs.id }
-    let id = UUID()
-    let pageTitle: String
-    let videoURL: URL
-    let lastPlayedTime: Double
-}
-
+// --- HELPERS & VIEWMODELS ---
 struct VisualEffectView: NSViewRepresentable {
     func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.blendingMode = .behindWindow; view.state = .active; view.material = .underWindowBackground
+        let view = NSVisualEffectView(); view.blendingMode = .behindWindow; view.state = .active; view.material = .underWindowBackground
         return view
     }
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 
+// THIS IS THE DEFINITIVE FIX FOR WINDOW MANAGEMENT & UI CONSISTENCY
+class PlayerWindowManager: NSObject, NSWindowDelegate {
+    static let shared = PlayerWindowManager()
+    private var playerWindow: NSWindow?
+    private var playerManager: PlayerManager?
+    
+    private weak var playerModel: SharedPlayerModel?
+    private weak var recentsManager: RecentsManager?
+
+    func showPlayer(with video: FoundVideo, playerModel: SharedPlayerModel, recentsManager: RecentsManager) {
+        self.playerModel = playerModel
+        self.recentsManager = recentsManager
+        playerModel.currentVideo = video
+        
+        if let playerWindow = playerWindow {
+            playerWindow.makeKeyAndOrderFront(nil)
+            playerWindow.title = video.pageTitle
+            return
+        }
+        
+        let playerView = PlayerView(onManagerCreated: { manager in
+            self.playerManager = manager
+        })
+        .environmentObject(playerModel)
+        .environmentObject(recentsManager)
+        
+        let hostingController = NSHostingController(rootView: playerView)
+        let newWindow = NSWindow(contentViewController: hostingController)
+        newWindow.title = video.pageTitle
+        newWindow.setContentSize(NSSize(width: 800, height: 450))
+        newWindow.center()
+        newWindow.delegate = self
+        
+        self.playerWindow = newWindow
+        newWindow.makeKeyAndOrderFront(nil)
+    }
+    
+    func windowWillClose(_ notification: Notification) {
+        if let manager = self.playerManager {
+            let finalTime = manager.getCurrentTime()
+            recentsManager?.updatePlaybackTime(for: manager.videoURL, at: finalTime)
+        }
+        self.playerWindow = nil
+        self.playerManager = nil
+    }
+}
+
 // --- MAIN CONTENT VIEW ---
 struct ContentView: View {
-    enum AppState { case launcher, browser, videoPlayer }
-    
-    @State private var appState: AppState = .launcher
-    @State private var urlString: String = ""
     @State private var destinationURL: URL?
-    @State private var foundVideo: FoundVideo?
-    @State private var recentItems: [RecentItem] = []
-    private let recentsKey = "VideoRecents"
+    @State private var urlString: String = ""
+    
+    @EnvironmentObject private var playerModel: SharedPlayerModel
+    @EnvironmentObject private var recentsManager: RecentsManager
 
     var body: some View {
         ZStack {
             VisualEffectView().ignoresSafeArea()
-
-            switch appState {
-            case .launcher:
+            if let url = destinationURL {
+                BrowserView(
+                    url: url,
+                    onBack: { self.destinationURL = nil },
+                    onVideoFound: { video in
+                        PlayerWindowManager.shared.showPlayer(with: video, playerModel: playerModel, recentsManager: recentsManager)
+                        recentsManager.addOrUpdate(video: video)
+                    }
+                )
+            } else {
                 LauncherView(
                     urlString: $urlString,
-                    recentItems: $recentItems,
-                    onGo: { url in
-                        self.destinationURL = url
-                        self.appState = .browser
-                    },
+                    recentItems: $recentsManager.items,
+                    onGo: { url in self.destinationURL = url },
                     onSelectRecent: { video in
-                        self.foundVideo = video
-                        self.appState = .videoPlayer
+                        PlayerWindowManager.shared.showPlayer(with: video, playerModel: playerModel, recentsManager: recentsManager)
+                        recentsManager.addOrUpdate(video: video)
                     },
-                    onClearRecents: clearRecents
-                )
-            case .browser:
-                if let url = destinationURL {
-                    BrowserView(
-                        url: url,
-                        onBack: { self.appState = .launcher },
-                        onVideoFound: { videoFromWeb in
-                            self.foundVideo = FoundVideo(
-                                pageTitle: videoFromWeb.pageTitle,
-                                videoURL: videoFromWeb.videoURL,
-                                lastPlayedTime: 0.0
-                            )
-                            self.appState = .videoPlayer
-                        }
-                    )
-                }
-            case .videoPlayer:
-                if let video = foundVideo {
-                    PlayerView(
-                        video: video,
-                        onBack: { finalTime in
-                            self.updateRecentItemTime(for: video, at: finalTime)
-                            self.appState = .launcher
-                        }
-                    )
-                }
+                    onDeleteRecent: { item in
+                        recentsManager.delete(item: item)
+                    },
+                    onClearRecents: {
+                        recentsManager.clearAll()
+                    })
             }
         }
-        .frame(minWidth: 700, minHeight: 450)
+        .frame(minWidth: 1024, minHeight: 768)
         .preferredColorScheme(.dark)
-        .onAppear(perform: loadRecents)
-        .onChange(of: foundVideo) { newVideo in
-            if let video = newVideo {
-                addRecentItem(title: video.pageTitle, url: video.videoURL)
-            }
-        }
-    }
-    
-    // --- HELPER FUNCTIONS (addRecentItem is updated) ---
-    private func addRecentItem(title: String, url: URL) {
-        if !recentItems.contains(where: { $0.urlString == url.absoluteString }) {
-            recentItems.insert(RecentItem(title: title, url: url), at: 0)
-            
-            // ** THIS IS THE CHANGE: Limit is now 10 **
-            if recentItems.count > 10 {
-                recentItems = Array(recentItems.prefix(10))
-            }
-            saveRecents()
-        }
-    }
-
-    private func updateRecentItemTime(for video: FoundVideo, at time: Double) {
-        if let index = recentItems.firstIndex(where: { $0.urlString == video.videoURL.absoluteString }) {
-            recentItems[index].playbackTime = time
-            saveRecents()
-        }
-    }
-    
-    private func saveRecents() {
-        if let encoded = try? JSONEncoder().encode(recentItems) { UserDefaults.standard.set(encoded, forKey: recentsKey) }
-    }
-
-    private func loadRecents() {
-        if let data = UserDefaults.standard.data(forKey: recentsKey),
-           let decoded = try? JSONDecoder().decode([RecentItem].self, from: data) { self.recentItems = decoded }
-    }
-
-    private func clearRecents() {
-        recentItems.removeAll()
-        saveRecents()
     }
 }
 
-// --- UI COMPONENTS, EXTENSIONS, & PREVIEWS (Unchanged) ---
+// --- ALL MODULAR VIEWS ---
 
 struct LauncherView: View {
-    @Binding var urlString: String
-    @Binding var recentItems: [RecentItem]
-    var onGo: (URL) -> Void
-    var onSelectRecent: (FoundVideo) -> Void
-    var onClearRecents: () -> Void
-
+    @Binding var urlString: String; @Binding var recentItems: [RecentItem]
+    var onGo: (URL) -> Void; var onSelectRecent: (FoundVideo) -> Void
+    var onDeleteRecent: (RecentItem) -> Void; var onClearRecents: () -> Void
+    
     private func formatTime(_ totalSeconds: Double) -> String {
-        let seconds = Int(totalSeconds) % 60
-        let minutes = Int(totalSeconds) / 60
-        return String(format: "%02d:%02d", minutes, seconds)
+        let secondsInt = Int(totalSeconds); let hours = secondsInt / 3600; let minutes = (secondsInt % 3600) / 60; let seconds = (secondsInt % 3600) % 60
+        if hours > 0 { return String(format: "%d:%02d:%02d", hours, minutes, seconds) }
+        else { return String(format: "%02d:%02d", minutes, seconds) }
     }
-
+    
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                TextField("Enter URL", text: $urlString)
-                    .textFieldStyle(PlainTextFieldStyle()).font(.system(size: 14)).padding(12)
-                    .background(Color.black.opacity(0.2)).cornerRadius(8).foregroundColor(.white)
+                TextField("Enter URL", text: $urlString).textFieldStyle(PlainTextFieldStyle()).font(.system(size: 14)).padding(12).background(Color.black.opacity(0.2)).cornerRadius(8).foregroundColor(.white)
                 Button("Go") {
-                    let trimmedString = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmedString.isEmpty else { return }
-                    var finalUrlString = trimmedString
-                    if !trimmedString.lowercased().hasPrefix("http://") && !trimmedString.lowercased().hasPrefix("https://") {
-                        finalUrlString = "https://" + trimmedString
-                    }
-                    if let url = URL(string: finalUrlString), url.host != nil { onGo(url) }
-                }.keyboardShortcut(.defaultAction).font(.system(size: 14, weight: .semibold))
-                .padding(.horizontal, 22).padding(.vertical, 12).background(Color.accentColor)
-                .foregroundColor(.white).cornerRadius(8).buttonStyle(PlainButtonStyle())
+                    let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines); guard !trimmed.isEmpty else { return }
+                    var finalUrl = trimmed
+                    if !finalUrl.lowercased().hasPrefix("http") { finalUrl = "https://" + finalUrl }
+                    if let url = URL(string: finalUrl), url.host != nil { onGo(url) }
+                }.keyboardShortcut(.defaultAction).font(.system(size: 14, weight: .semibold)).padding(.horizontal, 22).padding(.vertical, 12).background(Color.accentColor).foregroundColor(.white).cornerRadius(8).buttonStyle(PlainButtonStyle())
             }.frame(maxWidth: 500).padding(.top, 40).padding(.horizontal)
             
-            if !recentItems.isEmpty {
-                VStack(spacing: 8) {
-                    HStack {
-                        Text("Recents").font(.system(size: 14, weight: .medium)).foregroundColor(.secondary)
-                        Spacer()
-                        Button("Clear All", action: onClearRecents)
-                            .font(.system(size: 12)).foregroundColor(.accentColor).buttonStyle(PlainButtonStyle())
-                    }.padding(.horizontal, 5)
-
+            VStack(spacing: 8) {
+                HStack {
+                    Text("Recents").font(.system(size: 14, weight: .medium)).foregroundColor(.secondary); Spacer()
+                    if !recentItems.isEmpty { Button("Clear All", action: onClearRecents).font(.system(size: 12)) }
+                }.padding(.horizontal, 5)
+                
+                if recentItems.isEmpty {
+                    Text("Recent videos will be added here.").font(.system(size: 13)).foregroundColor(.secondary).padding().frame(maxWidth: .infinity).background(Color.white.opacity(0.05)).cornerRadius(8)
+                } else {
                     ForEach(recentItems) { item in
-                        Button(action: {
-                            if let url = URL(string: item.urlString) {
-                                onSelectRecent(FoundVideo(
-                                    pageTitle: item.title,
-                                    videoURL: url,
-                                    lastPlayedTime: item.playbackTime
-                                ))
-                            }
-                        }) {
-                            HStack {
-                                Image(systemName: "clock.arrow.circlepath")
-                                Text(item.title).lineLimit(1)
-                                Spacer()
-                                Text(formatTime(item.playbackTime)).foregroundColor(.secondary)
-                            }.padding(.horizontal, 12).padding(.vertical, 10)
-                        }.buttonStyle(PlainButtonStyle()).background(Color.white.opacity(0.12)).cornerRadius(8)
+                        HStack {
+                            Button(action: { if let url = URL(string: item.urlString) { onSelectRecent(FoundVideo(pageTitle: item.title, videoURL: url, lastPlayedTime: item.playbackTime)) } }) {
+                                HStack { Image(systemName: "clock.arrow.circlepath"); Text(item.title).lineLimit(1); Spacer(); Text(formatTime(item.playbackTime)).foregroundColor(.secondary) }
+                            }.buttonStyle(PlainButtonStyle())
+                            Button(action: { onDeleteRecent(item) }) { Image(systemName: "xmark.circle.fill").foregroundColor(.gray.opacity(0.7)) }.buttonStyle(PlainButtonStyle())
+                        }.padding(.horizontal, 12).padding(.vertical, 10).background(Color.white.opacity(0.12)).cornerRadius(8)
                     }
-                }.frame(maxWidth: 500).padding(.top, 25)
-            }
+                }
+            }.frame(maxWidth: 500).padding(.top, 25)
             Spacer()
         }
     }
 }
 
-struct PlayerView: View {
-    let video: FoundVideo
-    var onBack: (Double) -> Void
-    @State private var player: AVPlayer
-    
-    init(video: FoundVideo, onBack: @escaping (Double) -> Void) {
-        self.video = video
-        self.onBack = onBack
-        self._player = State(initialValue: AVPlayer(url: video.videoURL))
-    }
-    
+struct BrowserView: View {
+    let url: URL; var onBack: () -> Void; var onVideoFound: (FoundVideo) -> Void
     var body: some View {
         ZStack(alignment: .topLeading) {
-            VideoPlayer(player: player)
-                .edgesIgnoringSafeArea(.all)
-                .onAppear {
-                    let seekTime = CMTime(seconds: video.lastPlayedTime, preferredTimescale: 600)
-                    player.seek(to: seekTime)
-                    player.play()
-                }
-                .onDisappear {
-                    let currentTime = CMTimeGetSeconds(player.currentTime())
-                    onBack(currentTime)
-                }
-
-            BackButton(action: {
-                let currentTime = CMTimeGetSeconds(player.currentTime())
-                onBack(currentTime)
-            })
+            WebView(url: url, onVideoFound: onVideoFound)
+            BackButton(action: onBack)
         }
     }
 }
 
-struct BrowserView: View {
-    let url: URL
-    var onBack: () -> Void
-    var onVideoFound: (FoundVideo) -> Void
+class PlayerManager: ObservableObject {
+    let player: AVPlayer; let videoURL: URL
+    private var activity: NSObjectProtocol?
+    init(video: FoundVideo) {
+        self.player = AVPlayer(url: video.videoURL); self.videoURL = video.videoURL
+        player.seek(to: CMTime(seconds: video.lastPlayedTime, preferredTimescale: 600))
+        self.activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .idleSystemSleepDisabled], reason: "Playing video")
+    }
+    func play() { player.play() }
+    func cleanup() {
+        player.pause()
+        if let activity = self.activity { ProcessInfo.processInfo.endActivity(activity); self.activity = nil }
+    }
+    func getCurrentTime() -> Double { CMTimeGetSeconds(player.currentTime()) }
+    deinit { cleanup() }
+}
+
+struct PlayerView: View {
+    @EnvironmentObject private var playerModel: SharedPlayerModel
+    var onManagerCreated: (PlayerManager) -> Void
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            WebView(url: url) { video in
-                let newVideo = FoundVideo(pageTitle: video.pageTitle, videoURL: video.videoURL, lastPlayedTime: 0)
-                onVideoFound(newVideo)
-            }
-            BackButton(action: onBack)
+        if let video = playerModel.currentVideo {
+            PlayerContentView(video: video, onManagerCreated: onManagerCreated)
+                .id(video.id)
+        } else {
+            Text("No video selected.").frame(minWidth: 400, minHeight: 225)
         }
+    }
+}
+
+struct PlayerContentView: View {
+    let video: FoundVideo
+    var onManagerCreated: (PlayerManager) -> Void
+    @StateObject private var playerManager: PlayerManager
+    
+    init(video: FoundVideo, onManagerCreated: @escaping (PlayerManager) -> Void) {
+        self.video = video
+        self.onManagerCreated = onManagerCreated
+        self._playerManager = StateObject(wrappedValue: PlayerManager(video: video))
+    }
+    
+    var body: some View {
+        VideoPlayer(player: playerManager.player)
+            .onAppear {
+                playerManager.play()
+                onManagerCreated(playerManager)
+            }
+            .edgesIgnoringSafeArea(.all)
     }
 }
 
@@ -256,18 +215,15 @@ struct BackButton: View {
     var action: () -> Void
     var body: some View {
         Button(action: action) {
-            Image(systemName: "chevron.backward.circle.fill")
-                .font(.title).foregroundColor(.white.opacity(0.7)).shadow(radius: 5)
+            Image(systemName: "chevron.backward.circle.fill").font(.title).foregroundColor(.white.opacity(0.7)).shadow(radius: 5)
         }.buttonStyle(PlainButtonStyle()).padding(.leading).padding(.top, 12)
     }
-}
-
-extension URL: Identifiable {
-    public var id: String { self.absoluteString }
 }
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
+            .environmentObject(SharedPlayerModel())
+            .environmentObject(RecentsManager())
     }
 }
