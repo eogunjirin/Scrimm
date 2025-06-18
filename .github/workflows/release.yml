@@ -85,46 +85,35 @@ jobs:
         echo "Generated tag: $TAG"
         
     - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ steps.tag.outputs.TAG }}
-        release_name: Scrimm ${{ steps.tag.outputs.TAG }}
+        name: Scrimm ${{ steps.tag.outputs.TAG }}
         body: |
-          Automated release of Scrimm macOS app
+          🚀 **Automated release of Scrimm macOS app**
           
-          ## Installation
+          ## 📥 Installation
+          **Option 1 (Recommended): DMG Installation**
           1. Download the DMG file below
           2. Open the DMG file
           3. Drag Scrimm.app to your Applications folder
-          4. You may need to allow the app in System Preferences > Security & Privacy if it's from an unidentified developer
           
-          Alternatively, download the ZIP file and extract Scrimm.app to your Applications folder.
+          **Option 2: ZIP Installation**
+          1. Download the ZIP file below
+          2. Extract Scrimm.app to your Applications folder
           
-          ## Changes
-          This release includes the latest changes from commit ${{ github.sha }}
+          **⚠️ Security Note:** You may need to allow the app in System Preferences > Security & Privacy if it's from an unidentified developer.
+          
+          ## 🔄 Changes
+          This release includes the latest changes from commit: `${{ github.sha }}`
+          
+          ---
+          *Built automatically on $(date '+%Y-%m-%d %H:%M:%S')*
+        files: |
+          Scrimm-${{ steps.build_number.outputs.BUILD_NUMBER }}.dmg
+          Scrimm-${{ steps.build_number.outputs.BUILD_NUMBER }}.zip
         draft: false
         prerelease: false
-        
-    - name: Upload DMG to Release
-      uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./Scrimm-${{ steps.build_number.outputs.BUILD_NUMBER }}.dmg
-        asset_name: Scrimm-${{ steps.tag.outputs.TAG }}.dmg
-        asset_content_type: application/octet-stream
-        
-    - name: Upload ZIP to Release
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./Scrimm-${{ steps.build_number.outputs.BUILD_NUMBER }}.zip
-        asset_name: Scrimm-${{ steps.tag.outputs.TAG }}.zip
-        asset_content_type: application/zip
 
