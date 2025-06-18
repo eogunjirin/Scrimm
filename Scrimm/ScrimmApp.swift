@@ -9,10 +9,10 @@ struct ScrimmApp: App {
     @StateObject private var recentsManager = RecentsManager()
 
     var body: some Scene {
-        // We now ONLY define the main window group.
-        // The player window is managed manually to guarantee a single instance
-        // and to have full control over its appearance (no tabs).
-        WindowGroup("Scrimm") {
+        // ** THE DEFINITIVE FIX: Use `Window` instead of `WindowGroup`. **
+        // This declares a single, unique main window for the app, which
+        // correctly removes all tab-related menu items by default.
+        Window("Scrimm", id: "main-window") {
             ContentView()
                 .environmentObject(playerModel)
                 .environmentObject(recentsManager)
@@ -20,7 +20,7 @@ struct ScrimmApp: App {
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact)
         .commands {
-            // This ensures "Reopen Window" works correctly from the Dock.
+            // This ensures "Reopen Window" works correctly from the Dock and removes "New".
             CommandGroup(replacing: .newItem) {}
         }
     }

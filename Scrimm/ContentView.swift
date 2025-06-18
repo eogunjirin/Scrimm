@@ -11,7 +11,6 @@ struct VisualEffectView: NSViewRepresentable {
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 
-// THIS IS THE DEFINITIVE FIX FOR WINDOW MANAGEMENT & UI CONSISTENCY
 class PlayerWindowManager: NSObject, NSWindowDelegate {
     static let shared = PlayerWindowManager()
     private var playerWindow: NSWindow?
@@ -162,18 +161,51 @@ struct BrowserView: View {
 class PlayerManager: ObservableObject {
     let player: AVPlayer; let videoURL: URL
     private var activity: NSObjectProtocol?
+    private var rateObserver: NSKeyValueObservation?
+
     init(video: FoundVideo) {
         self.player = AVPlayer(url: video.videoURL); self.videoURL = video.videoURL
         player.seek(to: CMTime(seconds: video.lastPlayedTime, preferredTimescale: 600))
-        self.activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .idleSystemSleepDisabled], reason: "Playing video")
+        
+        // ** THE DEFINITIVE FIX: Observe the player's rate to manage the power assertion. **
+        rateObserver = player.observe(\.rate, options: [.new]) { [weak self] player, change in
+            guard let self = self else { return }
+            
+            if player.rate > 0 {
+                // If playback starts and we don't have an assertion, get one.
+                if self.activity == nil {
+                    self.activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .idleSystemSleepDisabled, .idleDisplaySleepDisabled], reason: "Playing video in Scrimm")
+                }
+            } else {
+                // If playback stops and we have an assertion, release it.
+                if let activity = self.activity {
+                    ProcessInfo.processInfo.endActivity(activity)
+                    self.activity = nil
+                }
+            }
+        }
     }
+    
     func play() { player.play() }
+    
     func cleanup() {
         player.pause()
-        if let activity = self.activity { ProcessInfo.processInfo.endActivity(activity); self.activity = nil }
+        // Invalidate the observer to prevent memory leaks.
+        rateObserver?.invalidate()
+        rateObserver = nil
+        
+        // Release the assertion as a final safety measure.
+        if let activity = self.activity {
+            ProcessInfo.processInfo.endActivity(activity)
+            self.activity = nil
+        }
     }
+    
     func getCurrentTime() -> Double { CMTimeGetSeconds(player.currentTime()) }
-    deinit { cleanup() }
+    
+    deinit {
+        cleanup()
+    }
 }
 
 struct PlayerView: View {
