@@ -2,9 +2,17 @@ import Foundation
 import SwiftUI
 import AVKit
 
-// --- SHARED DATA MODEL ---
+// --- SHARED DATA MODELS ---
 class SharedPlayerModel: ObservableObject {
     @Published var currentVideo: FoundVideo?
+}
+
+class NavigationModel: ObservableObject {
+    @Published var destinationURL: URL?
+    
+    func reset() {
+        destinationURL = nil
+    }
 }
 
 // --- RECENTS DATA MANAGER ---
@@ -19,19 +27,21 @@ class RecentsManager: ObservableObject {
         let newItem = RecentItem(title: video.pageTitle, url: video.videoURL, playbackTime: video.lastPlayedTime)
         items.insert(newItem, at: 0)
         if items.count > 10 { items = Array(items.prefix(10)) }
-        PersistenceController.shared.saveRecents(items)
+        saveRecents()
     }
     
     func updatePlaybackTime(for url: URL, at time: Double) {
         if let index = items.firstIndex(where: { $0.urlString == url.absoluteString }) {
             items[index].playbackTime = time
-            PersistenceController.shared.saveRecents(items)
+            saveRecents()
         }
     }
     
     func delete(item: RecentItem) { items.removeAll { $0.id == item.id }; saveRecents() }
     func clearAll() { items.removeAll(); saveRecents() }
-    private func saveRecents() { PersistenceController.shared.saveRecents(items) }
+    
+    // ** THIS IS THE FIX: The saveRecents call is now correct. **
+    private func saveRecents() { PersistenceController.shared.saveRecents(self.items) }
 }
 
 // Simple singleton to handle saving and loading data.

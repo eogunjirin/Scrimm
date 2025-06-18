@@ -42,6 +42,7 @@ class PlayerWindowManager: NSObject, NSWindowDelegate {
         newWindow.setContentSize(NSSize(width: 800, height: 450))
         newWindow.center()
         newWindow.delegate = self
+        newWindow.tabbingMode = .disallowed
         
         self.playerWindow = newWindow
         newWindow.makeKeyAndOrderFront(nil)
@@ -59,19 +60,19 @@ class PlayerWindowManager: NSObject, NSWindowDelegate {
 
 // --- MAIN CONTENT VIEW ---
 struct ContentView: View {
-    @State private var destinationURL: URL?
     @State private var urlString: String = ""
     
     @EnvironmentObject private var playerModel: SharedPlayerModel
     @EnvironmentObject private var recentsManager: RecentsManager
+    @EnvironmentObject private var navigationModel: NavigationModel
 
     var body: some View {
         ZStack {
             VisualEffectView().ignoresSafeArea()
-            if let url = destinationURL {
+            if let url = navigationModel.destinationURL {
                 BrowserView(
                     url: url,
-                    onBack: { self.destinationURL = nil },
+                    onBack: { navigationModel.reset() },
                     onVideoFound: { video in
                         PlayerWindowManager.shared.showPlayer(with: video, playerModel: playerModel, recentsManager: recentsManager)
                         recentsManager.addOrUpdate(video: video)
@@ -81,7 +82,7 @@ struct ContentView: View {
                 LauncherView(
                     urlString: $urlString,
                     recentItems: $recentsManager.items,
-                    onGo: { url in self.destinationURL = url },
+                    onGo: { url in navigationModel.destinationURL = url },
                     onSelectRecent: { video in
                         PlayerWindowManager.shared.showPlayer(with: video, playerModel: playerModel, recentsManager: recentsManager)
                         recentsManager.addOrUpdate(video: video)
@@ -161,51 +162,18 @@ struct BrowserView: View {
 class PlayerManager: ObservableObject {
     let player: AVPlayer; let videoURL: URL
     private var activity: NSObjectProtocol?
-    private var rateObserver: NSKeyValueObservation?
-
     init(video: FoundVideo) {
         self.player = AVPlayer(url: video.videoURL); self.videoURL = video.videoURL
         player.seek(to: CMTime(seconds: video.lastPlayedTime, preferredTimescale: 600))
-        
-        // ** THE DEFINITIVE FIX: Observe the player's rate to manage the power assertion. **
-        rateObserver = player.observe(\.rate, options: [.new]) { [weak self] player, change in
-            guard let self = self else { return }
-            
-            if player.rate > 0 {
-                // If playback starts and we don't have an assertion, get one.
-                if self.activity == nil {
-                    self.activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .idleSystemSleepDisabled, .idleDisplaySleepDisabled], reason: "Playing video in Scrimm")
-                }
-            } else {
-                // If playback stops and we have an assertion, release it.
-                if let activity = self.activity {
-                    ProcessInfo.processInfo.endActivity(activity)
-                    self.activity = nil
-                }
-            }
-        }
+        self.activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .idleDisplaySleepDisabled], reason: "Playing video")
     }
-    
     func play() { player.play() }
-    
     func cleanup() {
         player.pause()
-        // Invalidate the observer to prevent memory leaks.
-        rateObserver?.invalidate()
-        rateObserver = nil
-        
-        // Release the assertion as a final safety measure.
-        if let activity = self.activity {
-            ProcessInfo.processInfo.endActivity(activity)
-            self.activity = nil
-        }
+        if let activity = self.activity { ProcessInfo.processInfo.endActivity(activity); self.activity = nil }
     }
-    
     func getCurrentTime() -> Double { CMTimeGetSeconds(player.currentTime()) }
-    
-    deinit {
-        cleanup()
-    }
+    deinit { cleanup() }
 }
 
 struct PlayerView: View {
@@ -257,5 +225,6 @@ struct ContentView_Previews: PreviewProvider {
         ContentView()
             .environmentObject(SharedPlayerModel())
             .environmentObject(RecentsManager())
+            .environmentObject(NavigationModel())
     }
 }
