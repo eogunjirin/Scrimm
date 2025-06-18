@@ -1,0 +1,71 @@
+name: Build and Release Scrimm
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Select Xcode version
+      run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+      
+    - name: Build app for release
+      run: |
+        xcodebuild -project Scrimm.xcodeproj \
+          -scheme Scrimm \
+          -configuration Release \
+          -derivedDataPath DerivedData \
+          build
+          
+    - name: Find built app
+      run: |
+        find DerivedData -name "*.app" -type d
+        APP_PATH=$(find DerivedData -name "Scrimm.app" -type d | head -1)
+        echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
+        
+    - name: Create application archive
+      run: |
+        mkdir -p release
+        cp -R "$APP_PATH" release/
+        cd release
+        zip -r ../Scrimm-macOS.zip Scrimm.app
+        
+    - name: Generate release info
+      run: |
+        echo "RELEASE_TAG=v$(date +%Y.%m.%d-%H%M)" >> $GITHUB_ENV
+        echo "RELEASE_DATE=$(date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_ENV
+        
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ env.RELEASE_TAG }}
+        name: Scrimm ${{ env.RELEASE_TAG }}
+        body: |
+          🚀 **Automatic Release - ${{ env.RELEASE_DATE }}**
+          
+          This is an automated release of the Scrimm macOS application.
+          
+          ## 📥 Installation Instructions
+          1. Download `Scrimm-macOS.zip` below
+          2. Extract the ZIP file
+          3. Move `Scrimm.app` to your Applications folder
+          4. Right-click the app and select "Open" the first time (macOS security)
+          
+          ## 🔄 Changes
+          Latest changes from commit: ${{ github.sha }}
+          
+          ---
+          *Built automatically from the latest main branch*
+        files: |
+          Scrimm-macOS.zip
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
