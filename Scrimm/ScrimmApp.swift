@@ -15,7 +15,7 @@ struct ScrimmApp: App {
                 .environmentObject(playerModel)
                 .environmentObject(recentsManager)
                 .environmentObject(navigationModel)
-                // This is the key: pass the model to the delegate when the view appears.
+                // This is the critical bridge: pass the model to the delegate.
                 .onAppear {
                     appDelegate.navigationModel = navigationModel
                 }
@@ -23,6 +23,7 @@ struct ScrimmApp: App {
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact)
         .commands {
+            // This ensures "Reopen Window" works correctly and removes "New".
             CommandGroup(replacing: .newItem) {}
         }
     }

@@ -1,11 +1,13 @@
 import SwiftUI
 
 class AppDelegate: NSObject, NSApplicationDelegate {
-    // A weak reference to the navigation model to avoid retain cycles.
+    // A weak reference to the navigation model to prevent retain cycles.
+    // This will be set by the ScrimmApp.
     weak var navigationModel: NavigationModel?
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        return false // Keep app running in the dock.
+        // This is correct. It keeps the app alive in the dock.
+        return false
     }
 
     // ** THIS IS THE DEFINITIVE FIX **
@@ -14,6 +16,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // If there are no visible windows (e.g., the user closed the main window)...
         if !flag {
             // ...reset the navigation state to nil BEFORE showing the window.
+            // This guarantees the app opens to the launcher.
             navigationModel?.reset()
             
             // Then, find the main window and bring it to the front.

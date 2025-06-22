@@ -15,7 +15,6 @@ class PlayerWindowManager: NSObject, NSWindowDelegate {
     static let shared = PlayerWindowManager()
     private var playerWindow: NSWindow?
     private var playerManager: PlayerManager?
-    
     private weak var playerModel: SharedPlayerModel?
     private weak var recentsManager: RecentsManager?
 
@@ -80,7 +79,7 @@ struct ContentView: View {
                 )
             } else {
                 LauncherView(
-                    urlString: $urlString,
+                    urlString: $navigationModel.urlString, // Use the shared model
                     recentItems: $recentsManager.items,
                     onGo: { url in navigationModel.destinationURL = url },
                     onSelectRecent: { video in
@@ -149,29 +148,35 @@ struct LauncherView: View {
     }
 }
 
+// ** THIS IS THE CORRECTED BROWSER VIEW **
 struct BrowserView: View {
     let url: URL; var onBack: () -> Void; var onVideoFound: (FoundVideo) -> Void
+    // The BrowserView now owns its WKWebView instance as state.
+    @State private var webViewInstance = WKWebView()
+
     var body: some View {
         ZStack(alignment: .topLeading) {
-            WebView(url: url, onVideoFound: onVideoFound)
+            // Pass the webView instance down to the representable.
+            WebView(url: url, webView: webViewInstance, onVideoFound: onVideoFound)
+                .onDisappear {
+                    // This is the guaranteed fix for the audio leak.
+                    webViewInstance.stopLoading()
+                    webViewInstance.load(URLRequest(url: URL(string:"about:blank")!))
+                }
             BackButton(action: onBack)
         }
     }
 }
 
 class PlayerManager: ObservableObject {
-    let player: AVPlayer; let videoURL: URL
-    private var activity: NSObjectProtocol?
+    let player: AVPlayer; let videoURL: URL; private var activity: NSObjectProtocol?
     init(video: FoundVideo) {
         self.player = AVPlayer(url: video.videoURL); self.videoURL = video.videoURL
         player.seek(to: CMTime(seconds: video.lastPlayedTime, preferredTimescale: 600))
         self.activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .idleDisplaySleepDisabled], reason: "Playing video")
     }
     func play() { player.play() }
-    func cleanup() {
-        player.pause()
-        if let activity = self.activity { ProcessInfo.processInfo.endActivity(activity); self.activity = nil }
-    }
+    func cleanup() { player.pause(); if let activity = self.activity { ProcessInfo.processInfo.endActivity(activity); self.activity = nil } }
     func getCurrentTime() -> Double { CMTimeGetSeconds(player.currentTime()) }
     deinit { cleanup() }
 }
@@ -182,8 +187,7 @@ struct PlayerView: View {
 
     var body: some View {
         if let video = playerModel.currentVideo {
-            PlayerContentView(video: video, onManagerCreated: onManagerCreated)
-                .id(video.id)
+            PlayerContentView(video: video, onManagerCreated: onManagerCreated).id(video.id)
         } else {
             Text("No video selected.").frame(minWidth: 400, minHeight: 225)
         }
@@ -196,17 +200,13 @@ struct PlayerContentView: View {
     @StateObject private var playerManager: PlayerManager
     
     init(video: FoundVideo, onManagerCreated: @escaping (PlayerManager) -> Void) {
-        self.video = video
-        self.onManagerCreated = onManagerCreated
+        self.video = video; self.onManagerCreated = onManagerCreated
         self._playerManager = StateObject(wrappedValue: PlayerManager(video: video))
     }
     
     var body: some View {
         VideoPlayer(player: playerManager.player)
-            .onAppear {
-                playerManager.play()
-                onManagerCreated(playerManager)
-            }
+            .onAppear { playerManager.play(); onManagerCreated(playerManager) }
             .edgesIgnoringSafeArea(.all)
     }
 }
