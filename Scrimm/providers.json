@@ -1,0 +1,22 @@
+[
+    {
+        "name": "Mapple",
+        "searchUrl": "https://mapple.tv/search?q="
+    },
+    {
+        "name": "FlixerTV",
+        "searchUrl": "https://theflixertv.to/search/"
+    },
+    {
+        "name": "DopeBox",
+        "searchUrl": "https://dopebox.to/search/"
+    },
+    {
+        "name": "Flixer",
+        "searchUrl": "https://flixer.su/search?q="
+    },
+    {
+        "name": "Sflix",
+        "searchUrl": "https://sflix2.to/search/"
+    }
+]
