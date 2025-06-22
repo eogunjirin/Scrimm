@@ -13,54 +13,35 @@ struct VisualEffectView: NSViewRepresentable {
 
 class PlayerWindowManager: NSObject, NSWindowDelegate {
     static let shared = PlayerWindowManager()
-    private var playerWindow: NSWindow?
-    private var playerManager: PlayerManager?
-    private weak var playerModel: SharedPlayerModel?
-    private weak var recentsManager: RecentsManager?
+    private var playerWindow: NSWindow?; private var playerManager: PlayerManager?
+    private weak var playerModel: SharedPlayerModel?; private weak var recentsManager: RecentsManager?
 
     func showPlayer(with video: FoundVideo, playerModel: SharedPlayerModel, recentsManager: RecentsManager) {
-        self.playerModel = playerModel
-        self.recentsManager = recentsManager
+        self.playerModel = playerModel; self.recentsManager = recentsManager
         playerModel.currentVideo = video
-        
         if let playerWindow = playerWindow {
-            playerWindow.makeKeyAndOrderFront(nil)
-            playerWindow.title = video.pageTitle
+            playerWindow.makeKeyAndOrderFront(nil); playerWindow.title = video.pageTitle
             return
         }
-        
-        let playerView = PlayerView(onManagerCreated: { manager in
-            self.playerManager = manager
-        })
-        .environmentObject(playerModel)
-        .environmentObject(recentsManager)
-        
+        let playerView = PlayerView(onManagerCreated: { manager in self.playerManager = manager })
+            .environmentObject(playerModel).environmentObject(recentsManager)
         let hostingController = NSHostingController(rootView: playerView)
         let newWindow = NSWindow(contentViewController: hostingController)
-        newWindow.title = video.pageTitle
-        newWindow.setContentSize(NSSize(width: 800, height: 450))
-        newWindow.center()
-        newWindow.delegate = self
+        newWindow.title = video.pageTitle; newWindow.setContentSize(NSSize(width: 800, height: 450)); newWindow.center(); newWindow.delegate = self
         newWindow.tabbingMode = .disallowed
-        
-        self.playerWindow = newWindow
-        newWindow.makeKeyAndOrderFront(nil)
+        self.playerWindow = newWindow; newWindow.makeKeyAndOrderFront(nil)
     }
     
     func windowWillClose(_ notification: Notification) {
         if let manager = self.playerManager {
-            let finalTime = manager.getCurrentTime()
-            recentsManager?.updatePlaybackTime(for: manager.videoURL, at: finalTime)
+            let finalTime = manager.getCurrentTime(); recentsManager?.updatePlaybackTime(for: manager.videoURL, at: finalTime)
         }
-        self.playerWindow = nil
-        self.playerManager = nil
+        self.playerWindow = nil; self.playerManager = nil
     }
 }
 
 // --- MAIN CONTENT VIEW ---
 struct ContentView: View {
-    @State private var urlString: String = ""
-    
     @EnvironmentObject private var playerModel: SharedPlayerModel
     @EnvironmentObject private var recentsManager: RecentsManager
     @EnvironmentObject private var navigationModel: NavigationModel
@@ -75,23 +56,17 @@ struct ContentView: View {
                     onVideoFound: { video in
                         PlayerWindowManager.shared.showPlayer(with: video, playerModel: playerModel, recentsManager: recentsManager)
                         recentsManager.addOrUpdate(video: video)
-                    }
-                )
+                    })
             } else {
                 LauncherView(
-                    urlString: $navigationModel.urlString, // Use the shared model
-                    recentItems: $recentsManager.items,
+                    urlString: $navigationModel.urlString, recentItems: $recentsManager.items,
                     onGo: { url in navigationModel.destinationURL = url },
                     onSelectRecent: { video in
                         PlayerWindowManager.shared.showPlayer(with: video, playerModel: playerModel, recentsManager: recentsManager)
                         recentsManager.addOrUpdate(video: video)
                     },
-                    onDeleteRecent: { item in
-                        recentsManager.delete(item: item)
-                    },
-                    onClearRecents: {
-                        recentsManager.clearAll()
-                    })
+                    onDeleteRecent: { item in recentsManager.delete(item: item) },
+                    onClearRecents: { recentsManager.clearAll() })
             }
         }
         .frame(minWidth: 1024, minHeight: 768)
@@ -105,13 +80,11 @@ struct LauncherView: View {
     @Binding var urlString: String; @Binding var recentItems: [RecentItem]
     var onGo: (URL) -> Void; var onSelectRecent: (FoundVideo) -> Void
     var onDeleteRecent: (RecentItem) -> Void; var onClearRecents: () -> Void
-    
     private func formatTime(_ totalSeconds: Double) -> String {
         let secondsInt = Int(totalSeconds); let hours = secondsInt / 3600; let minutes = (secondsInt % 3600) / 60; let seconds = (secondsInt % 3600) % 60
         if hours > 0 { return String(format: "%d:%02d:%02d", hours, minutes, seconds) }
         else { return String(format: "%02d:%02d", minutes, seconds) }
     }
-    
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
@@ -123,13 +96,11 @@ struct LauncherView: View {
                     if let url = URL(string: finalUrl), url.host != nil { onGo(url) }
                 }.keyboardShortcut(.defaultAction).font(.system(size: 14, weight: .semibold)).padding(.horizontal, 22).padding(.vertical, 12).background(Color.accentColor).foregroundColor(.white).cornerRadius(8).buttonStyle(PlainButtonStyle())
             }.frame(maxWidth: 500).padding(.top, 40).padding(.horizontal)
-            
             VStack(spacing: 8) {
                 HStack {
                     Text("Recents").font(.system(size: 14, weight: .medium)).foregroundColor(.secondary); Spacer()
                     if !recentItems.isEmpty { Button("Clear All", action: onClearRecents).font(.system(size: 12)) }
                 }.padding(.horizontal, 5)
-                
                 if recentItems.isEmpty {
                     Text("Recent videos will be added here.").font(.system(size: 13)).foregroundColor(.secondary).padding().frame(maxWidth: .infinity).background(Color.white.opacity(0.05)).cornerRadius(8)
                 } else {
@@ -148,7 +119,6 @@ struct LauncherView: View {
     }
 }
 
-// ** THIS IS THE CORRECTED BROWSER VIEW **
 struct BrowserView: View {
     let url: URL; var onBack: () -> Void; var onVideoFound: (FoundVideo) -> Void
     // The BrowserView now owns its WKWebView instance as state.
@@ -156,7 +126,6 @@ struct BrowserView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Pass the webView instance down to the representable.
             WebView(url: url, webView: webViewInstance, onVideoFound: onVideoFound)
                 .onDisappear {
                     // This is the guaranteed fix for the audio leak.
@@ -184,7 +153,6 @@ class PlayerManager: ObservableObject {
 struct PlayerView: View {
     @EnvironmentObject private var playerModel: SharedPlayerModel
     var onManagerCreated: (PlayerManager) -> Void
-
     var body: some View {
         if let video = playerModel.currentVideo {
             PlayerContentView(video: video, onManagerCreated: onManagerCreated).id(video.id)
@@ -195,15 +163,12 @@ struct PlayerView: View {
 }
 
 struct PlayerContentView: View {
-    let video: FoundVideo
-    var onManagerCreated: (PlayerManager) -> Void
+    let video: FoundVideo; var onManagerCreated: (PlayerManager) -> Void
     @StateObject private var playerManager: PlayerManager
-    
     init(video: FoundVideo, onManagerCreated: @escaping (PlayerManager) -> Void) {
         self.video = video; self.onManagerCreated = onManagerCreated
         self._playerManager = StateObject(wrappedValue: PlayerManager(video: video))
     }
-    
     var body: some View {
         VideoPlayer(player: playerManager.player)
             .onAppear { playerManager.play(); onManagerCreated(playerManager) }
